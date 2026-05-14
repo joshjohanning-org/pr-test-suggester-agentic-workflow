@@ -31,6 +31,7 @@ The agentic workflow should inspect the changed behavior and add obvious missing
 
 ## Notes
 
+- Before the agent can run, configure a repository or organization Actions secret named `COPILOT_GITHUB_TOKEN`. `gh aw secrets bootstrap --non-interactive` reports this as required for Copilot workflows and recommends a fine-grained PAT with the Copilot Requests permission.
 - The workflow does not modify production code.
 - Existing tests should be treated as contracts.
 - Agentic Workflow pushes that use the default `GITHUB_TOKEN` may not retrigger CI automatically. Configure `GH_AW_CI_TRIGGER_TOKEN` if you need the agent's test commit to trigger a fresh CI run.
