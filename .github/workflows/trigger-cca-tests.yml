@@ -20,10 +20,22 @@ permissions:
 
 jobs:
   trigger-cca:
-    if: github.event.pull_request.draft == false
+    # Only run on labeled PRs if the label is 'add-tests'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Determine base ref
+        id: refs
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base_ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_ref=${{ github.event.inputs.base_ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Start CCA task via API
         id: cca
         env:
@@ -31,25 +43,11 @@ jobs:
         run: |
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-
-          # For pull_request events, use the PR source branch, not the PR target branch.
-          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; then
-            BASE_REF="${{ github.event.pull_request.head.ref }}"
-            BASE_REPO="${{ github.event.pull_request.head.repo.full_name }}"
-
-            if [ "$BASE_REPO" != "${OWNER}/${REPO}" ]; then
-              echo "::error::This workflow only supports same-repository PR branches. PR head repo is ${BASE_REPO}."
-              exit 1
-            fi
-          else
-            BASE_REF="${{ github.event.inputs.base_ref }}"
-          fi
-
+          BASE_REF="${{ steps.refs.outputs.base_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
-          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests. \
-          Create a pull request targeting the ${BASE_REF} branch with the new tests. \
-          Do NOT push directly to ${BASE_REF} or to main. \
+          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests directly to the ${BASE_REF} branch. \
+          Do NOT create a new branch or pull request. Push your changes to ${BASE_REF} directly. \
           Follow the test patterns already in the repository. \
           Only add new test cases — do not modify existing tests. \
           Treat existing tests as contracts. \
@@ -65,7 +63,7 @@ jobs:
               --arg prompt "$PROMPT" \
               --arg model "$MODEL" \
               --arg base_ref "$BASE_REF" \
-              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: true}'
+              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: false}'
             )")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -99,7 +97,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TASK_URL="${{ steps.cca.outputs.task_url }}"
-          BASE_REF="${{ github.event.pull_request.head.ref }}"
+          BASE_REF="${{ steps.refs.outputs.base_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
           gh pr comment "${{ github.event.pull_request.number }}" \
@@ -108,6 +106,6 @@ jobs:
 
           **Task:** [View CCA session](${TASK_URL})
           **Model:** ${MODEL}
-          **Base branch:** \`${BASE_REF}\`
+          **Branch:** \`${BASE_REF}\`
 
-          CCA will create a PR targeting \`${BASE_REF}\` with test additions."
+          CCA will push test additions directly to the \`${BASE_REF}\` branch (same PR)."
