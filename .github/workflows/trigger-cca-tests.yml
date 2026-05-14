@@ -1,0 +1,86 @@
+name: Trigger CCA Test Writer
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch to base the CCA task on"
+        required: false
+        default: "main"
+      model:
+        description: "Model to use (e.g. claude-sonnet-4.6)"
+        required: false
+        default: "claude-sonnet-4.6"
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-cca:
+    # Only run on labeled PRs if the label is 'add-tests'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'add-tests')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine base ref
+        id: refs
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base_ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_ref=${{ github.event.inputs.base_ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start CCA task via API
+        env:
+          GH_TOKEN: ${{ secrets.CCA_API_TOKEN }}
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          BASE_REF="${{ steps.refs.outputs.base_ref }}"
+          MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
+
+          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests. \
+          Follow the test patterns already in the repository. \
+          Only add new test cases — do not modify existing tests. \
+          Treat existing tests as contracts. \
+          Run npm test to verify all tests pass before finishing."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/agents/repos/${OWNER}/${REPO}/tasks" \
+            -d "$(jq -nc \
+              --arg prompt "$PROMPT" \
+              --arg model "$MODEL" \
+              --arg base_ref "$BASE_REF" \
+              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: true}'
+            )")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: ${HTTP_CODE}"
+          echo "$BODY" | jq '.'
+
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "::error::CCA task creation failed with status ${HTTP_CODE}"
+            exit 1
+          fi
+
+          TASK_ID=$(echo "$BODY" | jq -r '.id')
+          TASK_URL=$(echo "$BODY" | jq -r '.html_url')
+          echo "✅ CCA task started: ${TASK_ID}"
+          echo "🔗 ${TASK_URL}"
+
+          echo "### CCA Task Started" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Task ID:** ${TASK_ID}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** [View task](${TASK_URL})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Base ref:** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
