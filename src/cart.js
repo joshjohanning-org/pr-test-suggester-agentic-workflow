@@ -16,6 +16,14 @@ export function subtotal(items) {
   }, 0);
 }
 
+export function itemCount(items) {
+  if (!Array.isArray(items)) {
+    throw new TypeError('items must be an array');
+  }
+
+  return items.reduce((count, item) => count + item.quantity, 0);
+}
+
 export function calculateTotal(items, options = {}) {
   const {
     taxRate = 0,
