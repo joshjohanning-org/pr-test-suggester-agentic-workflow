@@ -12,7 +12,7 @@ on:
         required: false
         default: "claude-sonnet-4.6"
   pull_request:
-    types: [labeled]
+    types: [opened, ready_for_review, reopened]
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
     # Only run on labeled PRs if the label is 'add-tests'
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'add-tests')
+      github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -46,7 +46,8 @@ jobs:
           BASE_REF="${{ steps.refs.outputs.base_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
-          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests. \
+          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests directly to the ${BASE_REF} branch. \
+          Do NOT create a new branch or pull request. Push your changes to ${BASE_REF} directly. \
           Follow the test patterns already in the repository. \
           Only add new test cases — do not modify existing tests. \
           Treat existing tests as contracts. \
@@ -62,7 +63,7 @@ jobs:
               --arg prompt "$PROMPT" \
               --arg model "$MODEL" \
               --arg base_ref "$BASE_REF" \
-              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: true}'
+              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: false}'
             )")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -107,4 +108,4 @@ jobs:
           **Model:** ${MODEL}
           **Branch:** \`${BASE_REF}\`
 
-          CCA will open a separate PR with test additions when complete."
+          CCA will push test additions directly to the \`${BASE_REF}\` branch (same PR)."
