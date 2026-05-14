@@ -1,5 +1,5 @@
 ---
-description: "Review new pull requests and suggest obvious missing unit tests."
+description: "Review new pull requests and add obvious missing unit tests."
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
@@ -11,17 +11,27 @@ permissions:
   pull-requests: read
   checks: read
 safe-outputs:
+  push-to-pull-request-branch:
+    target: triggering
+    max: 1
+    if-no-changes: "ignore"
+    excluded-files:
+      - "**/*.lock"
+      - "dist/**"
+      - "coverage/**"
+    fallback-as-pull-request: false
+    check-branch-protection: false
   add-comment:
     max: 1
 ---
 
-# PR Unit Test Suggester
+# PR Unit Test Backfill
 
-When a pull request is opened, updated, or marked ready for review, inspect the changed code and identify obvious missing unit tests.
+When a pull request is opened, updated, or marked ready for review, inspect the changed code and add obvious missing unit tests directly to the pull request branch.
 
 ## Task
 
-Review the pull request diff and determine whether the branch changes behavior that should have unit-test coverage.
+Review the pull request diff and determine whether the branch changes behavior that should have unit-test coverage. If there are obvious missing unit tests, add them to the PR branch.
 
 Focus on:
 
@@ -31,23 +41,26 @@ Focus on:
 
 ## Output
 
-Post one concise pull request comment.
+Prefer a same-PR code change that adds missing unit tests. Also post one concise pull request comment summarizing what you did.
 
-If obvious missing tests exist, include:
+If you add tests, the comment should include:
 
 - A short summary of the changed behavior.
-- A checklist of specific missing unit tests.
-- Suggested test file locations, matching the repository's existing conventions.
+- The tests added and where.
 - Any assumptions or uncertainty.
 
-If no obvious missing tests are found, post a brief comment saying no obvious missing unit-test gaps were found and mention what evidence you checked.
+If no obvious missing tests can be added safely, do not change files. Post a brief comment explaining what you checked and why no test changes were made.
 
 ## Guardrails
 
-- Do not modify files.
-- Do not create commits or pull requests.
+- Only add or update unit tests.
+- Do not modify production code.
+- Do not modify package manifests, lockfiles, workflow files, agent files, or configuration files.
+- Do not delete tests.
+- Do not weaken, rewrite, or remove existing assertions.
 - Do not suggest rewriting existing tests just to make implementation pass.
 - Treat existing tests as contracts.
-- Prefer additive test suggestions.
-- Keep the comment focused on unit tests only; do not perform a general code review.
+- Prefer additive tests in existing test files when that matches repo convention.
+- If changing an existing test file, add new test cases only.
+- Keep the work focused on unit tests only; do not perform a general code review.
 - If the diff is too large or the test strategy is unclear, say what would need human clarification instead of inventing coverage requirements.
