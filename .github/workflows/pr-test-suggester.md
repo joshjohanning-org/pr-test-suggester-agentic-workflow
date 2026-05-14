@@ -23,6 +23,68 @@ safe-outputs:
     check-branch-protection: false
   add-comment:
     max: 1
+  jobs:
+    hide-push-audit-comment:
+      description: "Minimize the generic commit-pushed audit comment after the useful summary comment is posted"
+      needs: safe_outputs
+      runs-on: ubuntu-latest
+      output: "Generic push audit comment minimized."
+      permissions:
+        issues: write
+        pull-requests: read
+      inputs:
+        reason:
+          description: "Why the generic push audit comment should be minimized"
+          required: false
+          type: string
+      steps:
+        - name: Minimize generic push audit comment
+          uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+          with:
+            script: |
+              const prNumber = context.payload.pull_request?.number ?? context.issue?.number;
+
+              if (!prNumber) {
+                core.info('No pull request number found for this event.');
+                return;
+              }
+
+              const comments = await github.paginate(
+                github.rest.issues.listComments,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber
+                }
+              );
+
+              const auditComment = comments
+                .reverse()
+                .find(comment =>
+                  comment.user?.login === 'github-actions[bot]' &&
+                  comment.body?.startsWith('Commit pushed:') &&
+                  comment.body?.includes(`actions/runs/${context.runId}`)
+                );
+
+              if (!auditComment) {
+                core.info('No generic push audit comment found to minimize.');
+                return;
+              }
+
+              await github.graphql(`
+                mutation($subjectId: ID!) {
+                  minimizeComment(input: {
+                    subjectId: $subjectId,
+                    classifier: OUTDATED
+                  }) {
+                    minimizedComment {
+                      isMinimized
+                    }
+                  }
+                }
+              `, { subjectId: auditComment.node_id });
+
+              core.info(`Minimized generic push audit comment ${auditComment.id}.`);
 ---
 
 # PR Unit Test Backfill
@@ -48,6 +110,7 @@ If you add tests, the comment should include:
 - A short summary of the changed behavior.
 - The tests added and where.
 - Any assumptions or uncertainty.
+- After requesting the test changes and summary comment, call `hide_push_audit_comment` so the generic "Commit pushed" audit comment is minimized and the PR conversation keeps the human-readable summary visible.
 
 If no obvious missing tests can be added safely, do not change files. Post a brief comment explaining what you checked and why no test changes were made.
 
