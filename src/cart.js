@@ -19,7 +19,8 @@ export function subtotal(items) {
 export function calculateTotal(items, options = {}) {
   const {
     taxRate = 0,
-    discountAmount = 0
+    discountAmount = 0,
+    promoCode
   } = options;
 
   if (taxRate < 0) {
@@ -31,7 +32,9 @@ export function calculateTotal(items, options = {}) {
   }
 
   const discountedSubtotal = Math.max(0, subtotal(items) - discountAmount);
+  const promoAdjustedSubtotal = promoCode === 'SAVE10'
+    ? discountedSubtotal * 0.9
+    : discountedSubtotal;
 
-  return Number((discountedSubtotal * (1 + taxRate)).toFixed(2));
+  return Number((promoAdjustedSubtotal * (1 + taxRate)).toFixed(2));
 }
-
