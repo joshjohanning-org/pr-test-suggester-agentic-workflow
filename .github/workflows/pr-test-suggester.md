@@ -23,6 +23,8 @@ safe-outputs:
     check-branch-protection: false
   add-comment:
     max: 1
+  noop:
+    report-as-issue: false
 ---
 
 # PR Unit Test Backfill
