@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { calculateTotal, subtotal } from '../src/cart.js';
+import { calculateTotal, removeItem, subtotal } from '../src/cart.js';
 
 describe('subtotal', () => {
   it('adds quantity times unit price for each item', () => {
@@ -35,6 +35,34 @@ describe('calculateTotal', () => {
     ];
 
     assert.equal(calculateTotal(items, { discountAmount: 25, taxRate: 0.1 }), 0);
+  });
+});
+
+describe('removeItem', () => {
+  it('removes an item by name', () => {
+    const items = [
+      { name: 'Notebook', quantity: 2, unitPrice: 4.5 },
+      { name: 'Pen', quantity: 3, unitPrice: 1.25 }
+    ];
+
+    assert.deepEqual(removeItem(items, 'Pen'), [
+      { name: 'Notebook', quantity: 2, unitPrice: 4.5 }
+    ]);
+  });
+
+  it('returns the original array when the name is not found', () => {
+    const items = [
+      { name: 'Notebook', quantity: 2, unitPrice: 4.5 }
+    ];
+
+    assert.equal(removeItem(items, 'Pen'), items);
+  });
+
+  it('throws TypeError when items is not an array', () => {
+    assert.throws(
+      () => removeItem('not an array', 'Notebook'),
+      /items must be an array/
+    );
   });
 });
 
