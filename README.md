@@ -12,7 +12,6 @@ The sample app is intentionally small: `src/cart.js` has existing unit tests in 
 - Compiled GitHub Actions workflow: `.github/workflows/pr-test-suggester.lock.yml`
 - Trigger: `pull_request` events for `opened`, `synchronize`, and `ready_for_review`
 - Safe outputs: push test-only changes to the triggering PR branch and post one pull request comment
-- PR comment cleanup: the workflow minimizes the generic `Commit pushed` audit comment after posting the human-readable summary comment
 
 ## Demo app
 
@@ -35,7 +34,6 @@ The agentic workflow should inspect the changed behavior and add obvious missing
 - Before the agent can run, configure a repository or organization Actions secret named `COPILOT_GITHUB_TOKEN`. `gh aw secrets bootstrap --non-interactive` reports this as required for Copilot workflows and recommends a fine-grained PAT with the Copilot Requests permission.
 - The workflow does not modify production code.
 - Existing tests should be treated as contracts.
-- The built-in push safe output creates an audit comment. This workflow keeps that audit trail but minimizes it so the PR conversation centers on the summary of tests added.
 - Agentic Workflow pushes that use the default `GITHUB_TOKEN` may not retrigger CI automatically. Configure `GH_AW_CI_TRIGGER_TOKEN` if you need the agent's test commit to trigger a fresh CI run.
 
 ## Update
