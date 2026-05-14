@@ -36,6 +36,23 @@ The agentic workflow should inspect the changed behavior and add obvious missing
 - Existing tests should be treated as contracts.
 - Agentic Workflow pushes that use the default `GITHUB_TOKEN` may not retrigger CI automatically. Configure `GH_AW_CI_TRIGGER_TOKEN` if you need the agent's test commit to trigger a fresh CI run.
 
+## CCA integration
+
+This repo also includes two CCA-related features:
+
+### Shared hooks via copilot-setup-steps.yml
+
+`.github/copilot-setup-steps.yml` installs hooks and skills from [`joshjohanning-org/copilot-shared-plugin`](https://github.com/joshjohanning-org/copilot-shared-plugin) into the CCA environment before the agent starts. This requires a `SHARED_PLUGIN_TOKEN` secret with `contents: read` on the shared plugin repo.
+
+### Trigger CCA test writer via API
+
+`.github/workflows/trigger-cca-tests.yml` starts a Copilot Cloud Agent task via the [Agent Tasks REST API](https://docs.github.com/en/rest/agent-tasks/agent-tasks?apiVersion=2026-03-10) to add missing tests. Two trigger modes:
+
+1. **Manual:** `workflow_dispatch` — pick a branch and model.
+2. **Label:** Add the `add-tests` label to a PR and CCA will create a test-addition PR against that branch.
+
+Requires a `CCA_API_TOKEN` secret: fine-grained PAT with `Agent tasks: read and write` permission.
+
 ## Update
 
 After editing the Markdown workflow source, recompile:

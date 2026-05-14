@@ -1,0 +1,31 @@
+steps:
+  - uses: actions/checkout@v4
+
+  # Install shared org hooks and skills from the shared plugin repo
+  - uses: actions/checkout@v4
+    with:
+      repository: joshjohanning-org/copilot-shared-plugin
+      path: .copilot-shared-plugin
+      token: ${{ secrets.SHARED_PLUGIN_TOKEN }}
+
+  - name: Install shared hooks and skills
+    run: |
+      # Copy hooks (merge with any repo-level hooks)
+      mkdir -p .github/hooks
+      cp -r .copilot-shared-plugin/.github/hooks/* .github/hooks/
+
+      # Copy hook scripts
+      mkdir -p scripts
+      cp -r .copilot-shared-plugin/scripts/* scripts/
+      chmod +x scripts/*.sh
+
+      # Copy skills
+      mkdir -p .github/skills
+      cp -r .copilot-shared-plugin/skills/* .github/skills/
+
+      # Clean up
+      rm -rf .copilot-shared-plugin
+
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 22
