@@ -19,7 +19,8 @@ export function subtotal(items) {
 export function calculateTotal(items, options = {}) {
   const {
     taxRate = 0,
-    discountAmount = 0
+    discountAmount = 0,
+    freeShippingThreshold = Infinity
   } = options;
 
   if (taxRate < 0) {
@@ -31,7 +32,10 @@ export function calculateTotal(items, options = {}) {
   }
 
   const discountedSubtotal = Math.max(0, subtotal(items) - discountAmount);
+  const shippingFee = freeShippingThreshold === Infinity
+    ? 0
+    : (discountedSubtotal >= freeShippingThreshold ? 0 : 5.99);
 
-  return Number((discountedSubtotal * (1 + taxRate)).toFixed(2));
+  return Number(((discountedSubtotal + shippingFee) * (1 + taxRate)).toFixed(2));
 }
 
