@@ -2,7 +2,7 @@
 description: "Review new pull requests and add obvious missing unit tests."
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, ready_for_review]
     forks: []
   skip-bots: [github-actions, copilot, dependabot]
   status-comment: true
