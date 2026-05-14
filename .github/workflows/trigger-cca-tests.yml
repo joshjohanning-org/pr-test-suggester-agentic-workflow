@@ -12,7 +12,7 @@ on:
         required: false
         default: "claude-sonnet-4.6"
   pull_request:
-    types: [labeled]
+    types: [opened, ready_for_review]
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
     # Only run on labeled PRs if the label is 'add-tests'
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'add-tests')
+      github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
