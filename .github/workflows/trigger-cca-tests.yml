@@ -1,6 +1,16 @@
 name: Trigger CCA Test Writer
 
 on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch to base the CCA task on"
+        required: false
+        default: "main"
+      model:
+        description: "Model to use (e.g. claude-sonnet-4.6)"
+        required: false
+        default: "claude-sonnet-4.6"
   pull_request:
     types: [opened, ready_for_review, reopened]
 
@@ -14,20 +24,90 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Post @copilot comment on PR
+      - name: Start CCA task via API
+        id: cca
         env:
           GH_TOKEN: ${{ secrets.CCA_API_TOKEN }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
 
-          gh pr comment "${PR_NUMBER}" \
-            --repo "${{ github.repository }}" \
-            --body "@copilot Review the changes in this PR and add obvious missing unit tests. \
+          # For pull_request events, use the PR source branch, not the PR target branch.
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; then
+            BASE_REF="${{ github.event.pull_request.head.ref }}"
+            BASE_REPO="${{ github.event.pull_request.head.repo.full_name }}"
+
+            if [ "$BASE_REPO" != "${OWNER}/${REPO}" ]; then
+              echo "::error::This workflow only supports same-repository PR branches. PR head repo is ${BASE_REPO}."
+              exit 1
+            fi
+          else
+            BASE_REF="${{ github.event.inputs.base_ref }}"
+          fi
+
+          MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
+
+          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests. \
+          Create a pull request targeting the ${BASE_REF} branch with the new tests. \
+          Do NOT push directly to ${BASE_REF} or to main. \
           Follow the test patterns already in the repository. \
           Only add new test cases — do not modify existing tests. \
           Treat existing tests as contracts. \
           Run npm test to verify all tests pass before finishing."
 
-          echo "### CCA Triggered via @copilot mention" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **PR:** #${PR_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Method:** \`@copilot\` PR comment (pushes to same branch)" >> "$GITHUB_STEP_SUMMARY"
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/agents/repos/${OWNER}/${REPO}/tasks" \
+            -d "$(jq -nc \
+              --arg prompt "$PROMPT" \
+              --arg model "$MODEL" \
+              --arg base_ref "$BASE_REF" \
+              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: true}'
+            )")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: ${HTTP_CODE}"
+          echo "$BODY" | jq '.'
+
+          if [ "$HTTP_CODE" != "201" ]; then
+            echo "::error::CCA task creation failed with status ${HTTP_CODE}"
+            exit 1
+          fi
+
+          TASK_ID=$(echo "$BODY" | jq -r '.id')
+          TASK_URL=$(echo "$BODY" | jq -r '.html_url')
+          echo "✅ CCA task started: ${TASK_ID}"
+          echo "🔗 ${TASK_URL}"
+
+          echo "task_id=${TASK_ID}" >> "$GITHUB_OUTPUT"
+          echo "task_url=${TASK_URL}" >> "$GITHUB_OUTPUT"
+
+          echo "### CCA Task Started" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Task ID:** ${TASK_ID}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** [View task](${TASK_URL})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Base ref:** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TASK_URL="${{ steps.cca.outputs.task_url }}"
+          BASE_REF="${{ github.event.pull_request.head.ref }}"
+          MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🤖 **Copilot Cloud Agent** task started to add missing unit tests.
+
+          **Task:** [View CCA session](${TASK_URL})
+          **Model:** ${MODEL}
+          **Base branch:** \`${BASE_REF}\`
+
+          CCA will create a PR targeting \`${BASE_REF}\` with test additions."
