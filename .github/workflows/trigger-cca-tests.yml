@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   trigger-cca:
@@ -36,6 +37,7 @@ jobs:
           fi
 
       - name: Start CCA task via API
+        id: cca
         env:
           GH_TOKEN: ${{ secrets.CCA_API_TOKEN }}
         run: |
@@ -79,8 +81,30 @@ jobs:
           echo "✅ CCA task started: ${TASK_ID}"
           echo "🔗 ${TASK_URL}"
 
+          echo "task_id=${TASK_ID}" >> "$GITHUB_OUTPUT"
+          echo "task_url=${TASK_URL}" >> "$GITHUB_OUTPUT"
+
           echo "### CCA Task Started" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Task ID:** ${TASK_ID}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** [View task](${TASK_URL})" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Base ref:** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TASK_URL="${{ steps.cca.outputs.task_url }}"
+          BASE_REF="${{ steps.refs.outputs.base_ref }}"
+          MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🤖 **Copilot Cloud Agent** task started to add missing unit tests.
+
+          **Task:** [View CCA session](${TASK_URL})
+          **Model:** ${MODEL}
+          **Branch:** \`${BASE_REF}\`
+
+          CCA will open a separate PR with test additions when complete."
