@@ -35,3 +35,11 @@ export function calculateTotal(items, options = {}) {
   return Number((discountedSubtotal * (1 + taxRate)).toFixed(2));
 }
 
+export function clearCart(items) {
+  if (!Array.isArray(items)) {
+    throw new TypeError('items must be an array');
+  }
+
+  return [];
+}
+
