@@ -100,7 +100,7 @@ jobs:
           echo "- **Head ref (push target):** ${HEAD_REF}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Comment on PR
+      - name: Comment on PR - task started
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,4 +117,82 @@ jobs:
           **Model:** ${MODEL}
           **Branch:** \`${HEAD_REF}\`
 
-          CCA will push test additions directly to the \`${HEAD_REF}\` branch (same PR)."
+          CCA will push test additions directly to the \`${HEAD_REF}\` branch."
+
+      - name: Wait for CCA task to complete
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.CCA_API_TOKEN }}
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          TASK_ID="${{ steps.cca.outputs.task_id }}"
+          MAX_ATTEMPTS=60  # 10 minutes max (60 * 10s)
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            STATE=$(curl -s \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "https://api.github.com/agents/repos/${OWNER}/${REPO}/tasks/${TASK_ID}" \
+              | jq -r '.state')
+
+            echo "Poll ${i}/${MAX_ATTEMPTS}: state=${STATE}"
+
+            if [ "$STATE" = "completed" ] || [ "$STATE" = "failed" ] || [ "$STATE" = "timed_out" ] || [ "$STATE" = "cancelled" ]; then
+              echo "state=${STATE}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "state=timeout" >> "$GITHUB_OUTPUT"
+          echo "::warning::CCA task did not complete within 10 minutes"
+
+      - name: Get new commits and comment summary
+        if: github.event_name == 'pull_request' && steps.wait.outputs.state == 'completed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HEAD_REF="${{ steps.refs.outputs.head_ref }}"
+          TASK_URL="${{ steps.cca.outputs.task_url }}"
+
+          # Get commits by Copilot on this branch
+          COMMITS=$(gh api "repos/${{ github.repository }}/commits?sha=${HEAD_REF}&per_page=10" \
+            --jq '[.[] | select(.author.login == "Copilot" or .author.login == "copilot[bot]") | "- `\(.sha[:8])` \(.commit.message | split("\n")[0])"] | join("\n")')
+
+          # Get list of test files changed
+          TEST_FILES=$(gh api "repos/${{ github.repository }}/commits?sha=${HEAD_REF}&per_page=5" \
+            --jq '[.[0:3][] | select(.author.login == "Copilot" or .author.login == "copilot[bot]")] | .[0].sha' \
+            | xargs -I{} gh api "repos/${{ github.repository }}/commits/{}" \
+            --jq '[.files[] | select(.filename | test("test|spec"; "i")) | "- `\(.filename)` (+\(.additions)/-\(.deletions))"] | join("\n")')
+
+          BODY="✅ **Copilot Cloud Agent** finished adding tests to \`${HEAD_REF}\`.
+
+          **Task:** [View CCA session](${TASK_URL})
+
+          **Commits:**
+          ${COMMITS}
+
+          **Test files changed:**
+          ${TEST_FILES}"
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "${BODY}"
+
+      - name: Comment on failure
+        if: github.event_name == 'pull_request' && steps.wait.outputs.state != 'completed' && steps.wait.outputs.state != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TASK_URL="${{ steps.cca.outputs.task_url }}"
+          STATE="${{ steps.wait.outputs.state }}"
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "⚠️ **Copilot Cloud Agent** task ended with state: \`${STATE}\`
+
+          **Task:** [View CCA session](${TASK_URL})"
+
