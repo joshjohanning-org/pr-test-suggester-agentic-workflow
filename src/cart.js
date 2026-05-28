@@ -35,3 +35,16 @@ export function calculateTotal(items, options = {}) {
   return Number((discountedSubtotal * (1 + taxRate)).toFixed(2));
 }
 
+export function removeItem(items, name) {
+  if (!Array.isArray(items)) {
+    throw new TypeError('items must be an array');
+  }
+
+  const index = items.findIndex(item => item.name === name);
+  if (index === -1) {
+    return items;
+  }
+
+  return [...items.slice(0, index), ...items.slice(index + 1)];
+}
+
