@@ -46,8 +46,7 @@ jobs:
           BASE_REF="${{ steps.refs.outputs.base_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
-          PROMPT="Review the code on branch ${BASE_REF} and add obvious missing unit tests directly to the ${BASE_REF} branch. \
-          Do NOT create a new branch or pull request. Push your changes to ${BASE_REF} directly. \
+          PROMPT="Review the code and add obvious missing unit tests. \
           Follow the test patterns already in the repository. \
           Only add new test cases — do not modify existing tests. \
           Treat existing tests as contracts. \
@@ -63,7 +62,8 @@ jobs:
               --arg prompt "$PROMPT" \
               --arg model "$MODEL" \
               --arg base_ref "$BASE_REF" \
-              '{prompt: $prompt, model: $model, base_ref: $base_ref, create_pull_request: false}'
+              --arg head_ref "$BASE_REF" \
+              '{prompt: $prompt, model: $model, base_ref: $base_ref, head_ref: $head_ref}'
             )")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -89,6 +89,7 @@ jobs:
           echo "- **Task ID:** ${TASK_ID}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** [View task](${TASK_URL})" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Base ref:** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Head ref (push target):** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on PR
