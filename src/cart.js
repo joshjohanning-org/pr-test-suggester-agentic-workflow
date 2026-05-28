@@ -35,3 +35,29 @@ export function calculateTotal(items, options = {}) {
   return Number((discountedSubtotal * (1 + taxRate)).toFixed(2));
 }
 
+export function applyDiscount(items, code) {
+  if (!Array.isArray(items)) {
+    throw new TypeError('items must be an array');
+  }
+
+  if (typeof code !== 'string' || code.trim() === '') {
+    throw new TypeError('code must be a non-empty string');
+  }
+
+  const discounts = {
+    SAVE10: 0.10,
+    SAVE20: 0.20,
+    HALF: 0.50,
+  };
+
+  const rate = discounts[code.toUpperCase()];
+
+  if (rate === undefined) {
+    throw new RangeError(`unknown discount code: ${code}`);
+  }
+
+  return items.map(item => ({
+    ...item,
+    unitPrice: Number((item.unitPrice * (1 - rate)).toFixed(2)),
+  }));
+}
