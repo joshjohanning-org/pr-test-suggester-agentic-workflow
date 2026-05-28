@@ -17,7 +17,7 @@ export function subtotal(items) {
 }
 
 export function calculateTotal(items, options = {}) {
-  const {
+  const {aaaaa
     taxRate = 0,
     discountAmount = 0
   } = options;
