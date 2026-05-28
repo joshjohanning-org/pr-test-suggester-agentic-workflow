@@ -4,9 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       base_ref:
-        description: "Branch to base the CCA task on"
+        description: "PR target branch (e.g. main)"
         required: false
         default: "main"
+      head_ref:
+        description: "PR source branch to push commits to (e.g. demo/add-has-item)"
+        required: true
       model:
         description: "Model to use (e.g. claude-sonnet-4.6)"
         required: false
@@ -27,12 +30,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Determine base ref
+      - name: Determine refs
         id: refs
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "base_ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+            # head_ref = PR source branch (where CCA pushes commits)
+            # base_ref = PR target branch (e.g. main)
+            echo "head_ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+            echo "base_ref=${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
           else
+            echo "head_ref=${{ github.event.inputs.head_ref }}" >> "$GITHUB_OUTPUT"
             echo "base_ref=${{ github.event.inputs.base_ref }}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -43,6 +50,7 @@ jobs:
         run: |
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
+          HEAD_REF="${{ steps.refs.outputs.head_ref }}"
           BASE_REF="${{ steps.refs.outputs.base_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
@@ -62,7 +70,7 @@ jobs:
               --arg prompt "$PROMPT" \
               --arg model "$MODEL" \
               --arg base_ref "$BASE_REF" \
-              --arg head_ref "$BASE_REF" \
+              --arg head_ref "$HEAD_REF" \
               '{prompt: $prompt, model: $model, base_ref: $base_ref, head_ref: $head_ref}'
             )")
 
@@ -88,8 +96,8 @@ jobs:
           echo "### CCA Task Started" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Task ID:** ${TASK_ID}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** [View task](${TASK_URL})" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Base ref:** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Head ref (push target):** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Base ref (PR target):** ${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Head ref (push target):** ${HEAD_REF}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Model:** ${MODEL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on PR
@@ -98,7 +106,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TASK_URL="${{ steps.cca.outputs.task_url }}"
-          BASE_REF="${{ steps.refs.outputs.base_ref }}"
+          HEAD_REF="${{ steps.refs.outputs.head_ref }}"
           MODEL="${{ github.event.inputs.model || 'claude-sonnet-4.6' }}"
 
           gh pr comment "${{ github.event.pull_request.number }}" \
@@ -107,6 +115,6 @@ jobs:
 
           **Task:** [View CCA session](${TASK_URL})
           **Model:** ${MODEL}
-          **Branch:** \`${BASE_REF}\`
+          **Branch:** \`${HEAD_REF}\`
 
-          CCA will push test additions directly to the \`${BASE_REF}\` branch (same PR)."
+          CCA will push test additions directly to the \`${HEAD_REF}\` branch (same PR)."
