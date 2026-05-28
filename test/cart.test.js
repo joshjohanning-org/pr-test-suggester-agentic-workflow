@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { calculateTotal, subtotal } from '../src/cart.js';
+import { calculateTotal, subtotal, totalItems } from '../src/cart.js';
 
 describe('subtotal', () => {
   it('adds quantity times unit price for each item', () => {
@@ -35,6 +35,35 @@ describe('calculateTotal', () => {
     ];
 
     assert.equal(calculateTotal(items, { discountAmount: 25, taxRate: 0.1 }), 0);
+  });
+});
+
+describe('totalItems', () => {
+  it('sums quantities across all items', () => {
+    const items = [
+      { name: 'Notebook', quantity: 2 },
+      { name: 'Pen', quantity: 3 }
+    ];
+
+    assert.equal(totalItems(items), 5);
+  });
+
+  it('returns zero for an empty array', () => {
+    assert.equal(totalItems([]), 0);
+  });
+
+  it('rejects negative quantities', () => {
+    assert.throws(
+      () => totalItems([{ name: 'Notebook', quantity: -1 }]),
+      /quantity cannot be negative/
+    );
+  });
+
+  it('throws when items is not an array', () => {
+    assert.throws(
+      () => totalItems('not an array'),
+      /items must be an array/
+    );
   });
 });
 
